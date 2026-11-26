@@ -1,0 +1,47 @@
+uninstall_sdk() (
+  local force= version sdk removal= reply
+  if [[ ${1-} == --force || ${1-} == -f ]]; then
+    force=1
+    shift
+  fi
+  [[ $# == 1 ]] || die 'usage: fenv uninstall [--force] <version>'
+  version=$1
+  validate_version "$version"
+  [[ $version != system ]] || die 'system Flutter is managed outside fenv'
+  sdk=$FENV_ROOT/versions/$version
+
+  [[ -x $sdk/bin/flutter && -x $sdk/bin/dart ]] || die "Flutter $version is not installed"
+  if [[ ${FENV_VERSION:-} == "$version" ]]; then
+    printf 'fenv: Flutter %s is selected by FENV_VERSION\n' "$version" >&2
+  fi
+  (
+    unset FENV_VERSION
+    resolve_version
+    if [[ $version_source == */.flutter-version && $version == "$1" ]]; then
+      printf 'fenv: Flutter %s is selected by %s\n' "$version" "$version_source" >&2
+    fi
+  ) || :
+  if [[ -f $FENV_ROOT/version && $(<"$FENV_ROOT/version") == "$version" ]]; then
+    printf 'fenv: Flutter %s is selected by %s/version\n' "$version" "$FENV_ROOT" >&2
+  fi
+
+  if [[ -z $force ]]; then
+    [[ -t 0 ]] || die 'uninstall requires confirmation; pass --force for scripts'
+    printf 'Uninstall Flutter %s? [y/N] ' "$version" >&2
+    read -r reply || exit 1
+    case "$reply" in y|Y|yes|YES) ;; *) exit 1 ;; esac
+  fi
+
+  source "$fenv_dir/libexec/fenv-sdk-lock"
+  trap 'if [[ -n $removal ]]; then rm -rf -- "$removal" || :; fi; release_sdk_lock' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
+  acquire_sdk_lock "$sdk"
+  [[ -x $sdk/bin/flutter && -x $sdk/bin/dart ]] || die "Flutter $version is not installed"
+  removal=$(mktemp -d "$FENV_ROOT/versions/.uninstall.XXXXXX")
+  mv -- "$sdk" "$removal/sdk"
+  rm -rf -- "$removal"
+  removal=
+  printf 'Uninstalled Flutter %s\n' "$version"
+)

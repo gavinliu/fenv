@@ -1,0 +1,16 @@
+if (( ! $+functions[compdef] )); then
+  autoload -Uz compinit
+  compinit -D
+fi
+
+_fenv_completion() {
+  local output
+  local -a args
+  if (( CURRENT > 2 )); then
+    args=("${(@)words[2,CURRENT-1]}")
+  fi
+  output=$(command fenv --complete "${args[@]}") || return
+  [[ -n $output ]] || return 0
+  compadd -- "${(@f)output}"
+}
+compdef _fenv_completion fenv

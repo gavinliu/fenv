@@ -1,0 +1,10 @@
+_fenv_completion() {
+  local candidates candidate
+  candidates=$(command fenv --complete "${COMP_WORDS[@]:1:COMP_CWORD-1}") || return
+  COMPREPLY=()
+  while IFS= read -r candidate; do
+    [[ -n $candidate ]] && COMPREPLY+=("$candidate")
+  done < <(compgen -W "$candidates" -- "${COMP_WORDS[COMP_CWORD]}")
+  return 0
+}
+complete -F _fenv_completion fenv

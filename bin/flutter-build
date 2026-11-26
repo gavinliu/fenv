@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+build_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+
+die() {
+  printf 'flutter-build: %s\n' "$*" >&2
+  exit 1
+}
+
+case "${1:-}" in
+  -h|--help)
+    printf 'Usage: flutter-build <version> <destination>\n       flutter-build <--list|--list-all> [--source flutter|ohos]\n'
+    exit 0
+    ;;
+  --list|--list-all)
+    source_filter=
+    if [[ $# != 1 ]]; then
+      [[ $# == 3 && $2 == --source ]] ||
+        die "usage: flutter-build $1 [--source flutter|ohos]"
+      case "$3" in
+        flutter) source_filter=https://github.com/flutter/flutter.git ;;
+        ohos) source_filter=https://gitcode.com/CPF-Flutter/flutter_flutter.git ;;
+        *) die "unknown source: $3 (expected flutter or ohos)" ;;
+      esac
+    fi
+    ;;
+  *)
+    [[ $# == 2 && -n $2 ]] || die 'usage: flutter-build <version> <destination>'
+    ;;
+esac
+
+request=$1
+definitions=${FLUTTER_BUILD_DEFINITIONS:-$build_dir/share/flutter-build}/versions.tsv
+if [[ $request == --list || $request == --list-all ]]; then
+  [[ -r $definitions ]] || die "cannot read version definitions: $definitions"
+  aligned=0
+  if [[ -t 1 ]]; then aligned=1; fi
+  LC_ALL=C awk -F '\t' -v list="$request" -v source="$source_filter" '
+    source != "" && $2 != source { next }
+    list == "--list" && $1 !~ /^[0-9]+\.[0-9]+\.[0-9]+([-+]ohos(-[0-9]+\.[0-9]+\.[0-9]+)?)?$/ { next }
+    $2 == "https://github.com/flutter/flutter.git" { print $1 "\tFlutter"; next }
+    $2 == "https://gitcode.com/CPF-Flutter/flutter_flutter.git" { print $1 "\tCPF-Flutter"; next }
+    NF >= 2 { print $1 "\t" $2 }
+  ' "$definitions" | LC_ALL=C sort -t $'\t' -k1,1V -k2,2 |
+    LC_ALL=C awk -F '\t' -v aligned="$aligned" '
+      !aligned { print; next }
+      {
+        versions[NR] = $1
+        sources[NR] = $2
+        if (length($1) > width) width = length($1)
+      }
+      END {
+        if (aligned) {
+          for (i = 1; i <= NR; i++) printf "%-*s  %s\n", width, versions[i], sources[i]
+        }
+      }
+    '
+  exit 0
+fi
+
+[[ $request =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$ ]] ||
+  die "invalid Flutter version: $request"
+
+sdk=$2
+case "$sdk" in
+  /*) ;;
+  *) sdk=$PWD/$sdk ;;
+esac
+sdk=${sdk%/}
+[[ -n $sdk ]] || die "destination must be an SDK directory"
+parent=${sdk%/*}
+source "$build_dir/libexec/fenv-sdk-lock"
+owns_lock=
+stage=
+
+trap '
+  if [[ -n $stage ]]; then rm -rf -- "$stage" || :; fi
+  release_sdk_lock
+' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+mkdir -p -- "${parent:-/}"
+acquire_sdk_lock "$sdk"
+if [[ -x $sdk/bin/flutter && -x $sdk/bin/dart ]]; then
+  printf 'Flutter %s is already installed\n' "$request"
+  exit 0
+fi
+[[ ! -e $sdk && ! -L $sdk ]] || die "incomplete SDK directory already exists: $sdk"
+
+[[ -r $definitions ]] || die "cannot read version definitions: $definitions"
+definition=$(LC_ALL=C awk -F '\t' -v version="$request" '
+  $1 == version { print $2 "\t" $3; exit }
+' "$definitions")
+[[ -n $definition ]] ||
+  die "Flutter $request is unavailable in the local definitions; update fenv to get newer versions"
+IFS=$'\t' read -r repository expected_commit <<< "$definition"
+[[ $repository == https://* || $repository == file:///* ]] ||
+  die "invalid repository URL for Flutter $request"
+[[ $expected_commit =~ ^[0-9a-f]{40}$ ]] ||
+  die "invalid Git commit for Flutter $request"
+
+stage=$(mktemp -d "$parent/.install.XXXXXX")
+printf 'Cloning Flutter %s from %s…\n' "$request" "$repository"
+git -c advice.detachedHead=false clone --depth 1 --single-branch --branch "$request" \
+  -- "$repository" "$stage/flutter"
+actual_commit=$(git -C "$stage/flutter" rev-parse HEAD)
+[[ $actual_commit == "$expected_commit" ]] ||
+  die "Git tag $request resolved to $actual_commit; expected $expected_commit"
+[[ -x $stage/flutter/bin/flutter && -x $stage/flutter/bin/dart ]] ||
+  die 'checkout does not contain Flutter and Dart executables'
+
+printf 'Initializing Flutter %s for this host…\n' "$request"
+(
+  cd -- "$stage/flutter"
+  CI=true ./bin/flutter --version --suppress-analytics
+)
+mv -- "$stage/flutter" "$sdk"
+printf 'Installed Flutter %s in %s\n' "$request" "$sdk"

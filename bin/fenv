@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+set -e
+
+fenv_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+source "$fenv_dir/libexec/fenv-common"
+
+resolve_latest() {
+  local source_name=flutter releases selected
+  if [[ $# != 1 ]]; then
+    [[ $# == 3 && $2 == --source ]] ||
+      die "usage: fenv $command latest [--source flutter|ohos]"
+    source_name=$3
+  fi
+  releases=$("$fenv_dir/bin/flutter-build" --list --source "$source_name") || return
+  [[ -n $releases ]] || die "no stable versions for $source_name in the local definitions"
+  selected=${releases##*$'\n'}
+  printf '%s\n' "${selected%%$'\t'*}"
+}
+
+command=${1:-help}
+if [[ $# -gt 0 ]]; then shift; fi
+case "$command" in
+  help|-h|--help)
+    cat <<'HELP'
+Usage: fenv <command>
+
+  install [version]     Clone and initialize a Flutter SDK
+  install latest        Install the latest locally defined stable release
+                        Accepts --source flutter|ohos (default: flutter)
+  uninstall [--force] <version>  Remove a managed SDK
+  install --list        List locally defined stable releases and their sources
+  install --list-all    Include prereleases in the release list
+                        Either list accepts --source flutter|ohos
+  local [version]       Read or write the current directory's .flutter-version
+  local latest          Write the latest stable version (accepts --source)
+  local --unset        Remove the current directory's .flutter-version
+  global [version]      Read or write the user default version
+  global latest         Write the latest stable version (accepts --source)
+  global --unset        Clear the user default version
+  shell [version]       Read or set the current shell override
+  shell --unset         Clear the current shell override
+  latest [--source flutter|ohos]  Print the latest stable version
+  version               Show the selected version and its source
+  versions              List installed SDKs
+  root                  Print the fenv data directory
+  prefix [version]      Print a managed SDK directory
+  which <flutter|dart>  Print the executable that would run
+  exec <command> [...]  Run a command with the selected SDK on PATH
+  init [bash|zsh]        Print shell initialization code
+  completions <shell>   Print Bash or zsh completion code
+  --version             Print the fenv version
+HELP
+    ;;
+  install)
+    request=${1-}
+    if [[ $request == --list || $request == --list-all ]]; then
+      exec "$fenv_dir/bin/flutter-build" "$@"
+    fi
+    if [[ $request == latest ]]; then
+      request=$(resolve_latest "$@")
+    else
+      [[ $# -le 1 ]] || die 'usage: fenv install [version|latest|--list|--list-all]'
+    fi
+    if [[ -z $request ]]; then
+      resolve_version
+      request=$version
+    fi
+    validate_version "$request"
+    [[ $request != system ]] || die 'specify a Flutter version to install'
+    exec "$fenv_dir/bin/flutter-build" "$request" "$FENV_ROOT/versions/$request"
+    ;;
+  uninstall)
+    source "$fenv_dir/libexec/fenv-uninstall"
+    uninstall_sdk "$@"
+    ;;
+  latest)
+    resolve_latest latest "$@"
+    ;;
+  --version)
+    [[ $# == 0 ]] || die 'usage: fenv --version'
+    printf 'fenv %s\n' "$(<"$fenv_dir/libexec/fenv-version")"
+    ;;
+  root)
+    [[ $# == 0 ]] || die 'usage: fenv root'
+    printf '%s\n' "$FENV_ROOT"
+    ;;
+  shell)
+    [[ $# == 0 ]] || die 'load fenv init in this shell to set or unset a shell version'
+    printf '%s\n' "${FENV_VERSION:-}"
+    ;;
+  --shell-code)
+    [[ $# == 1 ]] || die 'usage: fenv shell [version|--unset]'
+    if [[ $1 == --unset ]]; then
+      printf 'unset FENV_VERSION\n'
+    else
+      validate_version "$1"
+      printf 'export FENV_VERSION=%q\n' "$1"
+    fi
+    ;;
+  local|global)
+    request=${1-}
+    if [[ $request == latest ]]; then
+      request=$(resolve_latest "$@")
+    else
+      [[ $# -le 1 ]] || die "usage: fenv $command [version|latest]"
+    fi
+    file=$FENV_ROOT/version
+    if [[ $command == local ]]; then file=$PWD/.flutter-version; fi
+    if [[ $# == 0 ]]; then
+      [[ -f $file ]] || die "no version configured in $file"
+      read_version "$file"
+    elif [[ $1 == --unset ]]; then
+      rm -f -- "$file"
+    else
+      validate_version "$request"
+      write_version "$file" "$request"
+    fi
+    ;;
+  version)
+    resolve_version
+    printf '%s (set by %s)\n' "$version" "$version_source"
+    ;;
+  versions)
+    resolve_version
+    for sdk in "$FENV_ROOT"/versions/*; do
+      [[ -x $sdk/bin/flutter && -x $sdk/bin/dart ]] || continue
+      name=${sdk##*/}
+      if [[ $name == "$version" ]]; then
+        printf '* %s\n' "$name"
+      else
+        printf '  %s\n' "$name"
+      fi
+    done
+    ;;
+  prefix)
+    [[ $# -le 1 ]] || die 'usage: fenv prefix [version]'
+    if [[ $# == 1 ]]; then
+      validate_version "$1"
+      version=$1
+      version_source='command argument'
+    else
+      resolve_version
+    fi
+    sdk_prefix
+    ;;
+  which)
+    [[ $# == 1 ]] || die 'usage: fenv which <flutter|dart>'
+    resolve_version
+    sdk_executable "$1"
+    ;;
+  exec)
+    [[ $# -ge 1 ]] || die 'usage: fenv exec <command> [arguments]'
+    resolve_version
+    if [[ $version == system ]]; then
+      export PATH
+      PATH=$(system_path)
+    else
+      prefix=$(sdk_prefix)
+      export PATH="$prefix/bin:$PATH"
+    fi
+    exec "$@"
+    ;;
+  init)
+    [[ $# -le 1 ]] || die 'usage: fenv init [bash|zsh]'
+    shell=${1:-${SHELL##*/}}
+    case "$shell" in
+      bash|zsh) ;;
+      *) die 'supported shells: bash, zsh' ;;
+    esac
+    printf 'case ":$PATH:" in *:%q:*) ;; *) export PATH=%q:"$PATH" ;; esac\n' \
+      "$fenv_dir/bin" "$fenv_dir/bin"
+    printf 'case ":$PATH:" in *:%q:*) ;; *) export PATH=%q:"$PATH" ;; esac\n' \
+      "$fenv_dir/shims" "$fenv_dir/shims"
+    cat "$fenv_dir/libexec/fenv-shell"
+    if [[ $shell == bash ]]; then
+      printf 'if [[ $- == *i* ]]; then source %q; fi\n' "$fenv_dir/completions/bash"
+    else
+      cat <<'ZSH'
+if [[ -o interactive ]]; then
+  autoload -Uz add-zsh-hook
+  _fenv_load_completion() {
+    local completion_code
+    completion_code=$(command fenv completions zsh) && eval "$completion_code"
+    add-zsh-hook -d precmd _fenv_load_completion
+  }
+  add-zsh-hook precmd _fenv_load_completion
+fi
+ZSH
+    fi
+    ;;
+  completions)
+    [[ $# == 1 ]] || die 'usage: fenv completions <bash|zsh>'
+    case "$1" in
+      bash|zsh) cat "$fenv_dir/completions/$1" ;;
+      *) die 'supported shells: bash, zsh' ;;
+    esac
+    ;;
+  --complete)
+    source "$fenv_dir/libexec/fenv-completion"
+    completion_candidates "$@"
+    ;;
+  *)
+    die "unknown command: $command (try fenv help)"
+    ;;
+esac

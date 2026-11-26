@@ -1,0 +1,29 @@
+# Install and uninstall coordinate using the same lock for an SDK destination.
+
+acquire_sdk_lock() {
+  local destination=$1 attempts=0 parent
+  parent=${destination%/*}
+  sdk_lock=$parent/.${destination##*/}.lock
+  while ! mkdir -- "$sdk_lock" 2>/dev/null; do
+    if [[ -e $sdk_lock && ! -d $sdk_lock ]]; then
+      die "installation lock path is occupied: $sdk_lock"
+    fi
+    if [[ $attempts == 0 ]]; then
+      printf 'Waiting for the SDK lock at %s…\n' "$sdk_lock" >&2
+    fi
+    if [[ $attempts -ge 600 ]]; then
+      die "timed out waiting for $sdk_lock; check $sdk_lock/pid"
+    fi
+    attempts=$((attempts + 1))
+    sleep 1
+  done
+  owns_lock=1
+  printf '%s\n' "$$" > "$sdk_lock/pid"
+}
+
+release_sdk_lock() {
+  if [[ -n ${owns_lock:-} ]]; then
+    rm -f -- "$sdk_lock/pid" || :
+    rmdir -- "$sdk_lock" || :
+  fi
+}

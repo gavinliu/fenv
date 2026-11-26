@@ -1,0 +1,51 @@
+completion_candidates() {
+  if [[ $# == 0 ]]; then
+    printf '%s\n' help install uninstall local global shell latest version versions root prefix which exec init completions --version
+    return
+  fi
+
+  local subcommand=$1 sdk
+  shift
+  case "${!#}" in
+    --source)
+      case "$subcommand" in install|local|global|latest) printf '%s\n' flutter ohos ;; esac
+      return
+      ;;
+  esac
+  case "$subcommand" in
+    install)
+      case "${1-}" in
+        '') printf '%s\n' latest --list --list-all
+            "$fenv_dir/bin/flutter-build" --list-all | cut -f 1 ;;
+        latest|--list|--list-all) [[ $# != 1 ]] || printf '%s\n' --source ;;
+      esac
+      ;;
+    local|global)
+      if [[ $# == 0 ]]; then
+        printf '%s\n' latest system --unset
+        "$fenv_dir/bin/flutter-build" --list-all | cut -f 1
+      elif [[ $# == 1 && $1 == latest ]]; then
+        printf '%s\n' --source
+      fi
+      ;;
+    latest) [[ $# != 0 ]] || printf '%s\n' --source ;;
+    uninstall|prefix|shell)
+      if [[ $# == 0 ]]; then
+        case "$subcommand" in
+          uninstall) printf '%s\n' --force ;;
+          prefix) printf '%s\n' system ;;
+          shell) printf '%s\n' system --unset ;;
+        esac
+      elif [[ $subcommand != uninstall || $# != 1 || ( $1 != --force && $1 != -f ) ]]; then
+        return
+      fi
+      for sdk in "$FENV_ROOT"/versions/*; do
+        [[ -x $sdk/bin/flutter && -x $sdk/bin/dart ]] || continue
+        printf '%s\n' "${sdk##*/}"
+      done
+      ;;
+    which|exec) [[ $# != 0 ]] || printf '%s\n' flutter dart ;;
+    init|completions) [[ $# != 0 ]] || printf '%s\n' bash zsh ;;
+  esac
+  return 0
+}

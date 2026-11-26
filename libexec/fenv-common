@@ -1,0 +1,102 @@
+# Shared by the CLI commands.
+
+FENV_ROOT=${FENV_ROOT:-$HOME/.fenv}
+case "$FENV_ROOT" in
+  /*) ;;
+  *) FENV_ROOT=$PWD/$FENV_ROOT ;;
+esac
+
+die() {
+  printf 'fenv: %s\n' "$*" >&2
+  exit 1
+}
+
+validate_version() {
+  [[ $1 == system || $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.+-]+)?$ ]] ||
+    die "invalid Flutter version: $1"
+}
+
+read_version() {
+  local value
+  value=$(<"$1")
+  value=${value%$'\r'}
+  validate_version "$value"
+  printf '%s\n' "$value"
+}
+
+write_version() (
+  local file=$1 value=$2 temp
+  mkdir -p -- "${file%/*}"
+  temp=$(mktemp "$file.XXXXXX")
+  trap 'rm -f -- "$temp"' EXIT
+  printf '%s\n' "$value" > "$temp"
+  mv -f -- "$temp" "$file"
+)
+
+resolve_version() {
+  if [[ -n ${FENV_VERSION:-} ]]; then
+    version=$FENV_VERSION
+    version_source=FENV_VERSION
+  else
+    local dir=$PWD file
+    while :; do
+      file=${dir%/}/.flutter-version
+      if [[ -f $file ]]; then
+        version=$(read_version "$file")
+        version_source=$file
+        return
+      fi
+      [[ $dir != / ]] || break
+      dir=${dir%/*}
+      dir=${dir:-/}
+    done
+    if [[ -f $FENV_ROOT/version ]]; then
+      version_source=$FENV_ROOT/version
+      version=$(read_version "$version_source")
+    else
+      version=system
+      version_source='default'
+    fi
+  fi
+  validate_version "$version"
+}
+
+system_path() {
+  local remainder="${PATH-}:" dir canonical result= separator=
+  while [[ -n $remainder ]]; do
+    dir=${remainder%%:*}
+    remainder=${remainder#*:}
+    canonical=$(cd -- "${dir:-.}" 2>/dev/null && pwd -P) || canonical=
+    [[ $canonical != "$fenv_dir/shims" ]] || continue
+    result=$result$separator$dir
+    separator=:
+  done
+  printf '%s\n' "$result"
+}
+
+sdk_prefix() {
+  if [[ $version == system ]]; then
+    local flutter
+    flutter=$(sdk_executable flutter)
+    printf '%s\n' "${flutter%/bin/flutter}"
+    return
+  fi
+  local sdk=$FENV_ROOT/versions/$version
+  [[ -x $sdk/bin/flutter && -x $sdk/bin/dart ]] ||
+    die "Flutter $version is not installed (set by $version_source). Run: fenv install $version"
+  printf '%s\n' "$sdk"
+}
+
+sdk_executable() {
+  case "$1" in
+    flutter|dart) ;;
+    *) die "unsupported shim command: $1" ;;
+  esac
+  if [[ $version == system ]]; then
+    PATH=$(system_path) type -P "$1" || die "$1 was not found on PATH"
+  else
+    local sdk
+    sdk=$(sdk_prefix)
+    printf '%s/bin/%s\n' "$sdk" "$1"
+  fi
+}

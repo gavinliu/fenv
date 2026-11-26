@@ -1,0 +1,9 @@
+fenv() {
+  if [[ ${1-} == shell && $# -gt 1 ]]; then
+    local shell_code
+    shell_code=$(command fenv --shell-code "${@:2}") || return
+    eval "$shell_code"
+  else
+    command fenv "$@"
+  fi
+}
