@@ -4,6 +4,8 @@
 
 fenv manages multiple Flutter SDK versions on macOS and Linux. Pin a version per project and run `flutter` and `dart` as usual. fenv supports both upstream Flutter and the [CPF-Flutter OpenHarmony fork](https://gitcode.com/CPF-Flutter/flutter_flutter).
 
+fenv follows the design of [pyenv](https://github.com/pyenv/pyenv), [rbenv](https://github.com/rbenv/rbenv), and [nodenv](https://github.com/nodenv/nodenv). Keep several SDK versions installed side by side, record the exact version in a project file, and let lightweight shims on `PATH` select it when a command runs. A user default covers projects without a version file, and a shell override lets you try another version for one session. Installation supplies the SDKs that version selection can use.
+
 ## Installation
 
 ### Clone the repository

@@ -4,6 +4,8 @@
 
 fenv 是面向 macOS 和 Linux 的 Flutter SDK 版本管理工具。项目可以各自锁定版本，日常仍然直接运行 `flutter` 和 `dart`。支持 Flutter 官方版和 [CPF-Flutter 鸿蒙版](https://gitcode.com/CPF-Flutter/flutter_flutter)。
 
+fenv 沿用 [pyenv](https://github.com/pyenv/pyenv)、[rbenv](https://github.com/rbenv/rbenv) 和 [nodenv](https://github.com/nodenv/nodenv) 的设计思路。多个版本并排安装，项目用版本文件锁定具体版本，`PATH` 上的轻量 shim 在命令执行时按当前目录选中 SDK。没有版本文件的项目可以使用用户默认版本，当前终端也可以临时覆盖。安装负责准备 SDK，版本选择负责决定这次命令用哪套 SDK。
+
 ## 安装
 
 ### 克隆仓库
