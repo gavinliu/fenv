@@ -20,7 +20,7 @@ git clone https://github.com/gavinliu/fenv.git ~/.fenv
 
 ### 配置 Shell
 
-zsh 用户将下面这行加入 `~/.zprofile`。如果设置了 `ZDOTDIR`，则使用 `$ZDOTDIR/.zprofile`：
+zsh 用户将下面这行加入自己使用的启动文件。交互式 Shell 可用 `.zshrc`，登录 Shell 可用 `.zprofile`。这些文件位于 `$ZDOTDIR`，未设置时则位于用户主目录：
 
 ```zsh
 eval "$("$HOME/.fenv/bin/fenv" init zsh)"

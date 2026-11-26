@@ -20,7 +20,7 @@ If `~/.fenv` already contains SDKs or settings, clone into a separate directory 
 
 ### Set up your shell
 
-For zsh, add this line to `~/.zprofile`, or to `$ZDOTDIR/.zprofile` if you use `ZDOTDIR`:
+For zsh, add this line to the startup file you use for shell setup. Use `.zshrc` for interactive shells or `.zprofile` for login shells. These files live in `$ZDOTDIR` if set, or in your home directory:
 
 ```zsh
 eval "$("$HOME/.fenv/bin/fenv" init zsh)"
