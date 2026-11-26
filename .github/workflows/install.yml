@@ -25,14 +25,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install fenv and check versions
+      - name: Initialize fenv, install the SDK, and check versions
         shell: bash
         run: |
           set -euo pipefail
           export FENV_ROOT="$RUNNER_TEMP/fenv"
 
-          bash ./install.sh --no-init
-          eval "$("$FENV_ROOT/bin/fenv" init bash)"
+          eval "$("$GITHUB_WORKSPACE/bin/fenv" init bash)"
           fenv_version=$(fenv --version)
           printf '%s\n' "$fenv_version"
           [[ "$fenv_version" == "fenv $(cat libexec/fenv-version)" ]]

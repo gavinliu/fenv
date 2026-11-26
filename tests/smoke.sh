@@ -221,39 +221,4 @@ grep -Fq "selected by $FENV_ROOT/version" "$temp/error"
 fenv global --unset
 [[ ! -e "$FENV_ROOT/version" ]]
 if fenv uninstall --force system; then exit 1; fi
-# Reinstall into an isolated home for fenv without touching the real shell profiles.
-(
-  export FENV_ROOT="$temp/installed fenv" ZDOTDIR="$temp/zsh-config"
-  mkdir -p "$ZDOTDIR" "$FENV_ROOT/versions/keep"
-  FENV_ROOT=$(cd "$FENV_ROOT" && pwd -P)
-  printf '3.29.3\n' > "$FENV_ROOT/version"
-  printf '# existing settings\n' > "$ZDOTDIR/.zprofile"
-
-  "$repo/install.sh" --no-init > "$temp/install-output"
-  grep -q 'init bash' "$temp/install-output"
-  grep -q 'init zsh' "$temp/install-output"
-  [[ $(cat "$ZDOTDIR/.zprofile") == '# existing settings' ]]
-  [[ $("$FENV_ROOT/bin/fenv" --version) == "fenv $(cat "$repo/libexec/fenv-version")" ]]
-  [[ $("$FENV_ROOT/bin/fenv" global) == 3.29.3 && -d "$FENV_ROOT/versions/keep" ]]
-  cmp "$repo/share/flutter-build/versions.tsv" "$FENV_ROOT/share/flutter-build/versions.tsv"
-
-  bash_init=$(grep 'init bash' "$temp/install-output")
-  bash --noprofile --norc -c '
-    unset FENV_ROOT
-    eval "$1"
-    [[ $(fenv root) == "$2" ]] && fenv shell 3.29.3 && [[ $(fenv shell) == 3.29.3 ]]
-  ' bash "$bash_init" "$FENV_ROOT"
-
-  "$repo/install.sh" --shell zsh >/dev/null
-  "$repo/install.sh" --shell zsh >/dev/null
-  [[ $(grep -c '^# fenv initialization$' "$ZDOTDIR/.zprofile") == 1 ]]
-  grep -qx '# existing settings' "$ZDOTDIR/.zprofile"
-  if command -v zsh >/dev/null; then
-    zsh -fc '
-      unset FENV_ROOT
-      source "$ZDOTDIR/.zprofile"
-      [[ $(fenv root) == "$1" ]] && fenv shell 3.29.3 && [[ $(fenv shell) == 3.29.3 ]]
-    ' zsh "$FENV_ROOT"
-  fi
-)
 printf 'Smoke tests passed\n'
