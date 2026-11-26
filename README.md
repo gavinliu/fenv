@@ -6,22 +6,39 @@ fenv manages multiple Flutter SDK versions on macOS and Linux. Pin a version per
 
 ## Installation
 
-You need Bash, Git, and the host dependencies required by Flutter. From a checkout of this repository, run:
+### Clone the repository
+
+On macOS or Linux, clone fenv with Git:
 
 ```sh
-bash install.sh
+git clone https://github.com/gavinliu/fenv.git ~/.fenv
 ```
 
-The installer puts fenv in `~/.fenv` and detects Bash or zsh from `SHELL`. For Bash, it configures `~/.bashrc` and the login profile. For zsh, it configures `~/.zprofile` or `$ZDOTDIR/.zprofile`. Shell initialization also enables Tab completion.
+If `~/.fenv` already contains SDKs or settings, clone into a separate directory and use that checkout's `bin/fenv` path in the initialization commands below. The data directory still defaults to `~/.fenv`.
 
-| Option | Purpose |
-| --- | --- |
-| `--shell bash` or `--shell zsh` | Choose which shell to configure. |
-| `--no-init` | Install fenv and print initialization commands for manual setup. |
-| `--repo <git-url>` | Install from a specified fenv Git repository. |
-| `FENV_ROOT=/path/to/fenv` | Set a custom installation and data directory. |
+### Set up your shell
 
-Open a new login shell after installation, or run the initialization command printed by the installer. To update fenv, run the installer again from an updated checkout. It preserves installed SDKs and version settings.
+For zsh, add this line to `~/.zprofile`, or to `$ZDOTDIR/.zprofile` if you use `ZDOTDIR`:
+
+```zsh
+eval "$("$HOME/.fenv/bin/fenv" init zsh)"
+```
+
+For Bash, add this line to `~/.bashrc`. If your Bash login profile does not source `~/.bashrc`, add it to that profile as well.
+
+```bash
+eval "$("$HOME/.fenv/bin/fenv" init bash)"
+```
+
+Open a new login terminal and run `fenv --version`. Initialization also enables Tab completion.
+
+### Update fenv
+
+Pull changes in the directory where you cloned fenv:
+
+```sh
+git -C ~/.fenv pull --ff-only
+```
 
 ## Usage
 

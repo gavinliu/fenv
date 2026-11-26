@@ -6,22 +6,39 @@ fenv 是面向 macOS 和 Linux 的 Flutter SDK 版本管理工具。项目可以
 
 ## 安装
 
-需要 Bash、Git 和 Flutter 所需的主机依赖。在源码目录运行：
+### 克隆仓库
+
+在 macOS 或 Linux 上，用 Git 克隆 fenv：
 
 ```sh
-bash install.sh
+git clone https://github.com/gavinliu/fenv.git ~/.fenv
 ```
 
-安装器将 fenv 装到 `~/.fenv`，并根据 `SHELL` 识别 Bash 或 zsh。Bash 初始化写入 `~/.bashrc` 和登录配置，zsh 初始化写入 `~/.zprofile` 或 `$ZDOTDIR/.zprofile`。初始化也会启用 Tab 补全。
+如果 `~/.fenv` 中已有 SDK 或版本配置，可以克隆到另一个目录，并将下方初始化命令里的 `bin/fenv` 路径换成实际克隆路径。数据目录仍默认使用 `~/.fenv`。
 
-| 选项 | 用途 |
-| --- | --- |
-| `--shell bash` 或 `--shell zsh` | 指定要配置的 Shell。 |
-| `--no-init` | 安装工具，并打印可手动执行的初始化命令。 |
-| `--repo <git-url>` | 从指定的 fenv Git 仓库安装。 |
-| `FENV_ROOT=/path/to/fenv` | 指定安装与数据目录。 |
+### 配置 Shell
 
-安装完成后打开新的登录终端，或执行安装器打印的初始化命令。更新 fenv 时，从更新后的源码目录重新运行安装器即可，已有 SDK 和版本配置会保留。
+zsh 用户将下面这行加入 `~/.zprofile`。如果设置了 `ZDOTDIR`，则使用 `$ZDOTDIR/.zprofile`：
+
+```zsh
+eval "$("$HOME/.fenv/bin/fenv" init zsh)"
+```
+
+Bash 用户将下面这行加入 `~/.bashrc`。如果 Bash 登录配置没有加载 `~/.bashrc`，也把这行加入登录配置。
+
+```bash
+eval "$("$HOME/.fenv/bin/fenv" init bash)"
+```
+
+打开新的登录终端，运行 `fenv --version` 确认初始化成功。初始化也会启用 Tab 补全。
+
+### 更新 fenv
+
+在克隆目录中拉取更新：
+
+```sh
+git -C ~/.fenv pull --ff-only
+```
 
 ## 使用
 
