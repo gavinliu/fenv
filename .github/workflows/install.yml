@@ -1,0 +1,50 @@
+name: Verify installation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: Install Flutter ${{ matrix.flutter }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+        flutter: ['3.29.3', '3.41.10-ohos-1.0.1']
+    env:
+      FLUTTER_VERSION: ${{ matrix.flutter }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install fenv and check versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          export FENV_ROOT="$RUNNER_TEMP/fenv"
+
+          bash ./install.sh --no-init
+          eval "$("$FENV_ROOT/bin/fenv" init bash)"
+          fenv_version=$(fenv --version)
+          printf '%s\n' "$fenv_version"
+          [[ "$fenv_version" == "fenv $(cat libexec/fenv-version)" ]]
+
+          fenv install "$FLUTTER_VERSION"
+          fenv global "$FLUTTER_VERSION"
+          [[ "$(fenv global)" == "$FLUTTER_VERSION" ]]
+
+          flutter_version=$(flutter --version --suppress-analytics)
+          printf '%s\n' "$flutter_version"
+          [[ $'\n'"$flutter_version" == *$'\n'"Flutter $FLUTTER_VERSION "* ]]
+
+          dart_version=$(dart --version 2>&1)
+          printf '%s\n' "$dart_version"
+          [[ "$dart_version" == "Dart SDK version: "* ]]
