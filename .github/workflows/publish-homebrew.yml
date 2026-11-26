@@ -1,0 +1,149 @@
+name: Publish Homebrew formula
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-fenv-homebrew
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.formula.outputs.changed }}
+      tap_base: ${{ steps.formula.outputs.tap_base }}
+      formula: ${{ steps.formula.outputs.formula }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: fenv
+          persist-credentials: false
+
+      - uses: actions/checkout@v6
+        with:
+          repository: gavinliu/homebrew-tap
+          ref: main
+          path: tap
+          persist-credentials: false
+
+      - name: Prepare the formula for the released commit
+        id: formula
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          export RELEASE_REVISION
+          RELEASE_REVISION=$(git -C fenv rev-parse HEAD)
+
+          ruby <<'RUBY'
+          require "rubygems/version"
+
+          tag = ENV.fetch("RELEASE_TAG")
+          revision = ENV.fetch("RELEASE_REVISION")
+          abort "Expected a stable vMAJOR.MINOR.PATCH tag" unless tag.match?(/\Av\d+\.\d+\.\d+\z/)
+          version = tag.delete_prefix("v")
+          abort "Tag and fenv version disagree" unless File.read("fenv/libexec/fenv-version").strip == version
+
+          formula = "tap/Formula/fenv.rb"
+          body = File.read(formula)
+          tag_line = /^(\s*tag:\s*")v(\d+\.\d+\.\d+)(",)$/
+          revision_line = /^(\s*revision:\s*")([0-9a-f]{40})(")$/
+          abort "Expected exactly one tag and revision in #{formula}" unless
+            body.scan(tag_line).length == 1 && body.scan(revision_line).length == 1
+
+          current = body.match(tag_line)[2]
+          if Gem::Version.new(version) < Gem::Version.new(current)
+            puts "Tap already contains a newer release (#{current})."
+            exit
+          end
+          if version == current
+            abort "Published tag revision changed" unless body.match(revision_line)[2] == revision
+            puts "Tap already contains #{tag}."
+            exit
+          end
+
+          body.sub!(tag_line) { "#{$1}#{tag}#{$3}" }
+          body.sub!(revision_line) { "#{$1}#{revision}#{$3}" }
+          File.write(formula, body)
+          RUBY
+
+          if git -C tap diff --quiet -- Formula/fenv.rb; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git -C tap diff --check -- Formula/fenv.rb
+          tap_base=$(git -C tap rev-parse HEAD)
+          formula=$(openssl base64 -A -in tap/Formula/fenv.rb)
+          {
+            echo 'changed=true'
+            printf 'tap_base=%s\n' "$tap_base"
+            printf 'formula=%s\n' "$formula"
+          } >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test the release formula on ${{ matrix.os }}
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    env:
+      HOMEBREW_NO_ANALYTICS: '1'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      FORMULA: ${{ needs.prepare.outputs.formula }}
+    steps:
+      - name: Install and test the candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            brew_env=$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)
+            eval "$brew_env"
+          fi
+
+          brew tap gavinliu/tap
+          tap_dir=$(brew --repo gavinliu/tap)
+          printf '%s' "$FORMULA" | openssl base64 -d -A > "$tap_dir/Formula/fenv.rb"
+          brew trust --formula gavinliu/tap/fenv
+          brew install gavinliu/tap/fenv
+          brew test gavinliu/tap/fenv
+
+  publish:
+    name: Push the tested formula to the tap
+    needs: [prepare, test]
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: gavinliu/homebrew-tap
+          ref: ${{ needs.prepare.outputs.tap_base }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Commit and push the tested formula
+        shell: bash
+        env:
+          FORMULA: ${{ needs.prepare.outputs.formula }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FORMULA" | openssl base64 -d -A > Formula/fenv.rb
+          git diff --check -- Formula/fenv.rb
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- Formula/fenv.rb
+          git commit -m "Update fenv to $RELEASE_TAG"
+          git push origin HEAD:refs/heads/main
