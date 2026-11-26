@@ -8,38 +8,38 @@ fenv 沿用 [pyenv](https://github.com/pyenv/pyenv)、[rbenv](https://github.com
 
 ## 安装
 
-### 克隆仓库
-
-在 macOS 或 Linux 上，用 Git 克隆 fenv：
+通过 [Homebrew Tap](https://github.com/gavinliu/homebrew-tap) 安装 fenv：
 
 ```sh
-git clone https://github.com/gavinliu/fenv.git ~/.fenv
+brew install gavinliu/tap/fenv
 ```
 
-如果 `~/.fenv` 中已有 SDK 或版本配置，可以克隆到另一个目录，并将下方初始化命令里的 `bin/fenv` 路径换成实际克隆路径。数据目录仍默认使用 `~/.fenv`。
+SDK 和用户配置默认存放在 `~/.fenv`。
 
 ### 配置 Shell
 
-zsh 用户将下面这行加入自己使用的启动文件。交互式 Shell 可用 `.zshrc`，登录 Shell 可用 `.zprofile`。这些文件位于 `$ZDOTDIR`，未设置时则位于用户主目录：
+将对应的初始化命令加入你的 Shell 环境配置。
+
+**zsh**
 
 ```zsh
-eval "$("$HOME/.fenv/bin/fenv" init zsh)"
+eval "$(fenv init zsh)"
 ```
 
-Bash 用户将下面这行加入 `~/.bashrc`。如果 Bash 登录配置没有加载 `~/.bashrc`，也把这行加入登录配置。
+**Bash**
 
 ```bash
-eval "$("$HOME/.fenv/bin/fenv" init bash)"
+eval "$(fenv init bash)"
 ```
 
-打开新的登录终端，运行 `fenv --version` 确认初始化成功。初始化也会启用 Tab 补全。
+打开新终端，运行 `fenv --version` 确认配置生效。
 
 ### 更新 fenv
 
-在克隆目录中拉取更新：
+通过 Homebrew 更新 fenv：
 
 ```sh
-git -C ~/.fenv pull --ff-only
+brew upgrade gavinliu/tap/fenv
 ```
 
 ## 使用

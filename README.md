@@ -8,38 +8,38 @@ fenv follows the design of [pyenv](https://github.com/pyenv/pyenv), [rbenv](http
 
 ## Installation
 
-### Clone the repository
-
-On macOS or Linux, clone fenv with Git:
+Install fenv from the [Homebrew tap](https://github.com/gavinliu/homebrew-tap):
 
 ```sh
-git clone https://github.com/gavinliu/fenv.git ~/.fenv
+brew install gavinliu/tap/fenv
 ```
 
-If `~/.fenv` already contains SDKs or settings, clone into a separate directory and use that checkout's `bin/fenv` path in the initialization commands below. The data directory still defaults to `~/.fenv`.
+fenv stores SDKs and user settings in `~/.fenv` by default.
 
 ### Set up your shell
 
-For zsh, add this line to the startup file you use for shell setup. Use `.zshrc` for interactive shells or `.zprofile` for login shells. These files live in `$ZDOTDIR` if set, or in your home directory:
+Add the initialization command for your shell to your shell environment configuration.
+
+**zsh**
 
 ```zsh
-eval "$("$HOME/.fenv/bin/fenv" init zsh)"
+eval "$(fenv init zsh)"
 ```
 
-For Bash, add this line to `~/.bashrc`. If your Bash login profile does not source `~/.bashrc`, add it to that profile as well.
+**Bash**
 
 ```bash
-eval "$("$HOME/.fenv/bin/fenv" init bash)"
+eval "$(fenv init bash)"
 ```
 
-Open a new login terminal and run `fenv --version`. Initialization also enables Tab completion.
+Open a new terminal and run `fenv --version` to verify the setup.
 
 ### Update fenv
 
-Pull changes in the directory where you cloned fenv:
+Upgrade fenv through Homebrew:
 
 ```sh
-git -C ~/.fenv pull --ff-only
+brew upgrade gavinliu/tap/fenv
 ```
 
 ## Usage
